@@ -1,11 +1,4 @@
-from pathlib import Path
-import joblib
 
-MODEL_PATH = Path(__file__).parent / "house_price_model.joblib"
-artifacts = joblib.load(MODEL_PATH)
-
-**Create `requirements.txt`** in `ML_Handson/`:
-   ```text
    fastapi
    uvicorn
    pydantic
@@ -15,3 +8,4 @@ artifacts = joblib.load(MODEL_PATH)
    joblib
    streamlit
    requests
+   matplotlib

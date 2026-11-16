@@ -37,7 +37,7 @@ if st.button("Predict House Price", type="primary"):
     try:
         response = requests.post(API_URL, json=payload, timeout=10)
         response.raise_for_status()
-        price = response.json()["predicted_price"]
+        price = response.json()["Predicted Price"]
         st.success(f"### Estimated House Price: ${price:,.2f}")
     except requests.exceptions.RequestException as e:
         st.error(f"Could not connect to FastAPI backend: {e}")
