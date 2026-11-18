@@ -2,7 +2,7 @@ services:
   backend:
     build: .
     container_name: house-price-api
-    command: uvicorn Machine_learning_model.app:app --host 0.0.0.0 --port 8000
+    command: uvicorn Machine_Learning_model.app:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     restart: always

@@ -2,94 +2,94 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import TargetEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, PolynomialFeatures
+from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import OneHotEncoder
+
 
 def load_and_analysis():
 
-    df = pd.read_csv("House Price Prediction Dataset.csv")
-
-    df.corr(numeric_only=True)['Price'].sort_values(ascending=False)
+    df = pd.read_csv("house_price_dataset_india_12k.csv")
+    df.head(2)
+    df.describe()
+    df.corr(numeric_only=True).sort_values("Market_Price_INR", ascending=False)
     df.info()
     df.isna().sum()
+    df=df.drop_duplicates()
 
-    Q1 = df['Price'].quantile(0.25)
-    Q3 = df['Price'].quantile(0.75)
+    Q1 = df['Market_Price_INR'].quantile(0.25)
+    Q3 = df['Market_Price_INR'].quantile(0.75)
     IQR = Q3 - Q1
 
     lower_bound = Q1 - 1.5 * IQR
     upper_bound = Q3 + 1.5 * IQR
 
     # Filter rows that are outliers
-    outliers = df[(df['Price'] < lower_bound) | (df['Price'] > upper_bound)]
-    outliers
+    outliers = df[(df['Market_Price_INR'] < lower_bound) | (df['Market_Price_INR'] > upper_bound)]
+    outliers["Market_Price_INR"].sort_values(ascending=False)
+    df = df[df["Market_Price_INR"]<30000000]
 
     return df
 
 def data_process(df):
 
-    df_train = df[df['YearBuilt'].between(1900,2000)]
-    df_eval = df[df['YearBuilt'].between(2001,2015)]
-    df_test = df[df['YearBuilt'].between(2016,2023)]
+    x = df.drop("Market_Price_INR", axis=1)
+    y = df["Market_Price_INR"]
+    
+    x_train_eval,x_test,y_train_eval,y_test = train_test_split(x,y,test_size=0.15,random_state=42)
+    x_train,x_eval,y_train,y_eval = train_test_split(x_train_eval,y_train_eval,test_size=0.15,random_state=42)
 
-    condition_counts = df_train['Condition'].value_counts()
-    df_train['condition_frequency'] = df_train['Condition'].map(condition_counts)
-    df_eval['condition_frequency'] = df_eval['Condition'].map(condition_counts)
-    df_test['condition_frequency'] = df_test['Condition'].map(condition_counts)
+    price_per_sqft_mean = x_train.groupby("City")["Price_per_sqft_INR"].mean()
+    global_mean = x_train["Price_per_sqft_INR"].mean()
+
+    x_train["City_Encoded"] = x_train["City"].map(price_per_sqft_mean)
+    x_eval["City_Encoded"] = x_eval["City"].map(price_per_sqft_mean).fillna(global_mean)
+    x_test["City_Encoded"] = x_test["City"].map(price_per_sqft_mean).fillna(global_mean)
+
+    df['Locality_Tier'].value_counts()
+    preprocessor = ColumnTransformer(
+        transformers=[
+            (
+                'ohe',
+                OneHotEncoder(drop='first',handle_unknown='ignore', sparse_output=False),
+                ['Locality_Tier','Furnishing'],
+            )
+        ],
+        remainder='passthrough',  # Keeps all your numeric columns (area, bedrooms, etc.)!
+    )
+
+    # 3. Tell Scikit-learn to output a pandas DataFrame instead of a NumPy array
+    preprocessor.set_output(transform='pandas')
+
+    x_train=preprocessor.fit_transform(x_train)
+    x_eval=preprocessor.transform(x_eval)
+    x_test=preprocessor.transform(x_test)
+
+    x_train = x_train.drop(columns=["remainder__City"])
+    x_eval = x_eval.drop(columns=["remainder__City"])
+    x_test = x_test.drop(columns=["remainder__City"])
+
+    x_train = x_train.drop(columns=["remainder__House_ID"])
+    x_eval = x_eval.drop(columns=["remainder__House_ID"])
+    x_test = x_test.drop(columns=["remainder__House_ID"])
 
 
-    ohe = OneHotEncoder(drop='first', sparse_output=False)
-    df_train['Garage_Yes'] = ohe.fit_transform(df_train[['Garage']]).ravel()
-    df_eval['Garage_Yes'] = ohe.transform(df_eval[['Garage']]).ravel()
-    df_test['Garage_Yes'] = ohe.transform(df_test[['Garage']]).ravel()
-
-    #meanPrice = df_train.groupby('Location')['Price'].mean()
-    #globalMean = df_train['Price'].mean()
-    #cols = ['Location']
-    #te = TargetEncoder(target_type='continuous', random_state=42)
-    #df_train['Location_encoded'] = te.fit_transform(df_train[cols],df_train['Price'])
-
-    location_count = df_train['Location'].value_counts()
-
-    df_train['Location_encoded'] = df_train['Location'].map(location_count)
-    df_eval['Location_encoded'] = df_eval['Location'].map(location_count).fillna(0)
-    df_test['Location_encoded'] = df_test['Location'].map(location_count).fillna(0)
-
-    df_train_processed = df_train.drop(columns=['Location','Condition','Garage','Id'])
-    df_eval_processed = df_eval.drop(columns=['Location','Condition','Garage','Id'])
-    df_test_processed = df_test.drop(columns=['Location','Condition','Garage','Id'])
-
-    x_train = df_train_processed.drop('Price',axis=1)
-    y_train = df_train_processed['Price']
-
-    x_eval = df_eval_processed.drop('Price',axis=1)
-    y_eval = df_eval_processed['Price']
-
-    x_test = df_test_processed.drop('Price',axis=1)
-    y_test = df_test_processed['Price']
-
-    poly_feat = PolynomialFeatures(degree=2,include_bias=False)
-    x_train_poly = poly_feat.fit_transform(x_train)
-    x_eval_poly = poly_feat.transform(x_eval)
-    x_test_poly = poly_feat.transform(x_test)
-
-    sc = StandardScaler()
-    sc_x_train = sc.fit_transform(x_train_poly)
-    sc_x_eval = sc.transform(x_eval_poly)
-    sc_x_test = sc.transform(x_test_poly)
+    poly_conv = PolynomialFeatures(degree=2,include_bias=False)
+    sc_x_train_poly = poly_conv.fit_transform(x_train)
+    sc_x_eval_poly = poly_conv.transform(x_eval)
+    sc_x_test_poly = poly_conv.transform(x_test)
 
     encoding_artifacts={
-        "garage_ohe": ohe,
-        "condition_counts": condition_counts.to_dict(),
-        "location_counts": location_count.to_dict(),
-        "poly_feat": poly_feat
+        "price_per_sqft_mean": price_per_sqft_mean.to_dict(),
+        "global_mean": global_mean,
+        "preprocessor": preprocessor,
+        "poly_feat": poly_conv
     }
 
-    df_final_artifacts = df_train_processed.drop("Price", axis=1)
+    df_latest = x_train
 
-    return sc_x_train, y_train, sc_x_eval, y_eval, sc_x_test, y_test, sc, encoding_artifacts, df_final_artifacts
+    return sc_x_train_poly, y_train, sc_x_eval_poly, y_eval, sc_x_test_poly, y_test, encoding_artifacts,df_latest
 
 
 
